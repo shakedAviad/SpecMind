@@ -1,9 +1,18 @@
 from typing import Protocol, TypeVar
 
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
+
+from app.config.settings import Settings
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def create_chat_model(settings: Settings) -> ChatOpenAI:
+    return ChatOpenAI(
+        model=settings.openai_model,
+        api_key=SecretStr(settings.openai_api_key),
+    )
 
 
 class LlmStructuredOutputError(Exception):

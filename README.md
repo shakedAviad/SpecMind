@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, and a structured-output LLM client. There is no HTTP API, retrieval pipeline, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, and environment-based settings. There is no HTTP API, retrieval pipeline, or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -25,6 +25,7 @@ The workflow uses one retrieval retry when retrieved context is judged insuffici
 ## Prerequisites
 
 * Python >= 3.11
+* An OpenAI API key (required to actually invoke the LLM client; not required to run the test suite)
 
 ## Local Setup
 
@@ -34,20 +35,34 @@ python -m venv .venv
 # source .venv/bin/activate # macOS / Linux
 
 pip install -e ".[dev]"
+cp .env.example .env        # macOS / Linux
+# copy .env.example .env    # Windows
 ```
+
+## Environment Variables
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `OPENAI_API_KEY` | Yes | — | API key used by `OpenAiLlmClient` |
+| `OPENAI_MODEL` | No | `gpt-4.1-mini` | OpenAI model name |
+
+Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit tests, which use deterministic fakes.
 
 ## Project Structure
 
 ```text
 app/
+  config/
+    settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
   graph/
     state.py        # LangGraph GraphState and initial-state factory
   llm/
-    client.py        # StructuredLlmClient protocol and OpenAiLlmClient
+    client.py        # StructuredLlmClient protocol, OpenAiLlmClient, create_chat_model
   models/
     outputs.py       # ReasoningResult
     retrieval.py      # RetrievedChunk
 tests/
+  config/
   graph/
   llm/
   models/

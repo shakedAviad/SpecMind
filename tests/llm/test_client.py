@@ -1,8 +1,10 @@
 from typing import Any
 
 import pytest
+from pydantic import SecretStr
 
-from app.llm.client import LlmStructuredOutputError, OpenAiLlmClient
+from app.config.settings import Settings
+from app.llm.client import LlmStructuredOutputError, OpenAiLlmClient, create_chat_model
 from app.models.outputs import ReasoningResult
 
 
@@ -88,3 +90,13 @@ async def test_generate_structured_raises_when_the_underlying_call_fails() -> No
             user_prompt="user",
             output_model=ReasoningResult,
         )
+
+
+def test_create_chat_model_uses_model_and_api_key_from_settings() -> None:
+    settings = Settings(openai_api_key="sk-test", openai_model="gpt-4.1")
+
+    chat_model = create_chat_model(settings)
+
+    assert chat_model.model_name == "gpt-4.1"
+    assert isinstance(chat_model.openai_api_key, SecretStr)
+    assert chat_model.openai_api_key.get_secret_value() == "sk-test"
