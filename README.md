@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph: `app/graph/builder.py` (`build_graph`) wires all nine nodes — conversation understanding, memory retrieval, intent resolution, hybrid search, reranking, context evaluation, a conditional one-retry loop (rewrite query → re-search → re-rank → re-evaluate, at most once), reasoning, and generation — into a compiled `StateGraph` that can be invoked end-to-end with `graph.ainvoke(initial_state)`. There is still no HTTP API, no persistence of `memory_context` back into `MemoryStore` after a turn, and no Docker setup. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
+This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph, and a composition root now wires real services (OpenAI LLM/embedding clients, Qdrant, BM25 over the indexed JLS PDF) into it: `app/container.py` (`create_app_container`) builds a ready-to-use `AppContainer` holding the compiled graph, and `app/main.py` exposes a bare `FastAPI` app that builds this container on startup via its lifespan. There are still no HTTP routes (not even a health endpoint), no persistence of `memory_context` back into `MemoryStore` after a turn, and no Docker setup. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
 
 ## Architecture (Planned)
 
@@ -49,6 +49,7 @@ cp .env.example .env        # macOS / Linux
 | `OPENAI_EMBEDDING_DIMENSIONS` | No | `1536` | Must match the vector size produced by `OPENAI_EMBEDDING_MODEL` |
 | `QDRANT_URL` | No | `http://localhost:6333` | Qdrant endpoint |
 | `QDRANT_COLLECTION_NAME` | No | `jls_chunks` | Qdrant collection used for JLS chunks |
+| `JLS_PDF_PATH` | No | `jls25.pdf` | Path to the JLS PDF used to build the BM25 index at startup |
 
 Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit tests, which use deterministic fakes and an in-memory Qdrant client.
 
@@ -56,6 +57,8 @@ Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit
 
 ```text
 app/
+  main.py            # FastAPI app; builds the AppContainer on startup via lifespan
+  container.py        # create_app_container: composition root wiring real services into build_graph
   conversation/
     understanding.py   # ConversationUnderstanding: LLM-based follow-up detection
   chunking/
@@ -147,11 +150,12 @@ python -m mypy                    # type check
 * The retrieval query rewriter (`app/retrieval/query_rewriter.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node, so the architecture's one-retry-on-insufficient-context loop does not yet exist end-to-end (evaluator → rewriter → re-search → single retry limit are still disconnected pieces).
 * The reasoning service (`app/reasoning/service.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list short-circuits to an ungrounded result without an LLM call); it is not yet wired into any graph node.
 * The answer generator (`app/generation/answer_generator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it turns a `ReasoningResult` and source passages into the final user-facing `answer` string.
-* `app/graph/builder.py` compiles the full pipeline into a working `StateGraph` with the one-retry-on-insufficient-context loop, verified end-to-end with fakes in `tests/graph/test_builder.py` (sufficient on first try, retries once then succeeds, retries once then reasons anyway when still insufficient). However:
+* `app/graph/builder.py` compiles the full pipeline into a working `StateGraph` with the one-retry-on-insufficient-context loop, verified end-to-end with fakes in `tests/graph/test_builder.py` (sufficient on first try, retries once then succeeds, retries once then reasons anyway when still insufficient).
+* `app/container.py` now wires real services (not fakes) into that graph — verified in `tests/test_container.py` against an in-memory Qdrant client, but that test still requires the real, untracked `jls25.pdf` (see below). `app/main.py`'s `FastAPI` app builds this container on startup, but:
+  * There are no HTTP routes at all yet — not a question-answering endpoint, not even a liveness/readiness health check.
   * Nothing persists `memory_context` back into `MemoryStore` after a turn completes (the graph reads memory but never writes to it).
-  * There is no FastAPI application invoking this graph — it can only be exercised from Python/tests today.
-  * The graph uses in-process node instances constructed directly with fakes/real services in tests; there is no application-level composition root wiring real `Settings`, `OpenAiLlmClient`, `VectorSearch`, etc. into `build_graph` for actual use.
-* `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
+  * The BM25 index is rebuilt from the full JLS PDF synchronously during container creation (via `load_pdf_pages`/`chunk_pages`), with no separate ingestion step, caching, or progress reporting.
+* `tests/chunking/test_jls_integration.py`, `tests/retrieval/test_bm25_search_jls_integration.py`, and now `tests/test_container.py` all require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.
 * No CI pipeline yet.
