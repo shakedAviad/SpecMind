@@ -15,6 +15,5 @@ tests
 !.env.example
 *.egg-info
 specmind.egg-info
-*.pdf
 .idea
 .vscode

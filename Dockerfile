@@ -7,6 +7,8 @@ COPY app ./app
 
 RUN pip install --no-cache-dir .
 
+COPY data ./data
+
 RUN useradd --create-home --uid 1000 appuser
 USER appuser
 

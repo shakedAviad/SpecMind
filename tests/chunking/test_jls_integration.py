@@ -3,7 +3,7 @@ from pathlib import Path
 from app.chunking.chunker import chunk_pages
 from app.chunking.pdf_loader import load_pdf_pages
 
-_JLS_PDF_PATH = Path(__file__).resolve().parents[3] / "jls25.pdf"
+_JLS_PDF_PATH = Path(__file__).resolve().parents[2] / "data" / "jls25.pdf"
 
 
 def test_loading_and_chunking_the_real_jls_pdf_produces_sane_chunks() -> None:

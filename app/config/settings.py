@@ -12,4 +12,4 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection_name: str = "jls_chunks"
 
-    jls_pdf_path: str = "jls25.pdf"
+    jls_pdf_path: str = "data/jls25.pdf"

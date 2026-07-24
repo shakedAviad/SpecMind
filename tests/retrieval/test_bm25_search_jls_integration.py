@@ -4,7 +4,7 @@ from app.chunking.chunker import chunk_pages
 from app.chunking.pdf_loader import load_pdf_pages
 from app.retrieval.bm25_search import Bm25Search
 
-_JLS_PDF_PATH = Path(__file__).resolve().parents[3] / "jls25.pdf"
+_JLS_PDF_PATH = Path(__file__).resolve().parents[2] / "data" / "jls25.pdf"
 
 
 def test_bm25_search_ranks_the_matching_jls_section_first() -> None:

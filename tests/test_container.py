@@ -7,7 +7,7 @@ from app.container import create_app_container
 from app.memory.store import MemoryStore
 from app.retrieval.hybrid_search import HybridSearch
 
-_JLS_PDF_PATH = Path(__file__).resolve().parents[2] / "jls25.pdf"
+_JLS_PDF_PATH = Path(__file__).resolve().parents[1] / "data" / "jls25.pdf"
 
 
 async def test_create_app_container_wires_a_usable_container() -> None:

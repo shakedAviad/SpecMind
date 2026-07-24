@@ -18,9 +18,6 @@ services:
       - .env
     environment:
       QDRANT_URL: http://qdrant:6333
-      JLS_PDF_PATH: /data/jls25.pdf
-    volumes:
-      - ${JLS_PDF_HOST_PATH:-../jls25.pdf}:/data/jls25.pdf:ro
     depends_on:
       qdrant:
         condition: service_healthy
