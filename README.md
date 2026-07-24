@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, Qdrant-backed vector search, a BM25 lexical search, and a hybrid search that merges and deduplicates both. There is no HTTP API, LangGraph wiring of retrieval, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, Qdrant-backed vector search, a BM25 lexical search, a hybrid search that merges and deduplicates both, and an LLM-based reranker. There is no HTTP API, LangGraph wiring of retrieval/reranking, or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -69,8 +69,10 @@ app/
   memory/
     store.py          # MemoryStore: session-scoped, in-memory, isolated per session
   models/
-    outputs.py       # ReasoningResult
+    outputs.py       # ReasoningResult, RerankResult
     retrieval.py      # RetrievedChunk
+  reranking/
+    llm_reranker.py    # LlmReranker: LLM-based relevance reranking of candidate chunks
   retrieval/
     vector_search.py  # VectorSearch: Qdrant collection management, ingest, and search
     bm25_search.py     # Bm25Search: in-memory BM25 lexical search over indexed chunks
@@ -82,6 +84,7 @@ tests/
   llm/
   memory/
   models/
+  reranking/
   retrieval/
 ```
 
@@ -109,6 +112,7 @@ python -m mypy                    # type check
 * Qdrant vector search (`app/retrieval/vector_search.py`) is implemented and tested against an in-memory Qdrant client but is not yet wired into any graph node, and there is no running Qdrant service or Docker setup yet.
 * BM25 lexical search (`app/retrieval/bm25_search.py`) is implemented and in-process only (rebuilt from a `list[RetrievedChunk]` in memory); it is not yet wired into any graph node and has no persistence.
 * Hybrid search (`app/retrieval/hybrid_search.py`) merges and deduplicates vector and BM25 results by interleaving, without score normalization/fusion (e.g. no RRF); it is not yet wired into any graph node.
+* The LLM reranker (`app/reranking/llm_reranker.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node.
 * `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.

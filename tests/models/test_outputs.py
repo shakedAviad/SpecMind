@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.outputs import ReasoningResult
+from app.models.outputs import ReasoningResult, RerankResult
 
 
 def test_reasoning_result_accepts_valid_fields() -> None:
@@ -28,3 +28,20 @@ def test_reasoning_result_rejects_wrong_type_for_source_chunk_indexes() -> None:
             conclusion="conclusion",
             source_chunk_indexes=["not-an-int"],
         )
+
+
+def test_rerank_result_accepts_valid_indexes() -> None:
+    rerank_result = RerankResult(relevant_chunk_indexes=[2, 0, 1])
+
+    assert rerank_result.relevant_chunk_indexes == [2, 0, 1]
+
+
+def test_rerank_result_accepts_empty_indexes() -> None:
+    rerank_result = RerankResult(relevant_chunk_indexes=[])
+
+    assert rerank_result.relevant_chunk_indexes == []
+
+
+def test_rerank_result_rejects_wrong_type_for_relevant_chunk_indexes() -> None:
+    with pytest.raises(ValidationError):
+        RerankResult(relevant_chunk_indexes=["not-an-int"])
