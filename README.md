@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, and a session-scoped in-memory store. There is no HTTP API, retrieval pipeline, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, and a JLS PDF loader and chunker. There is no HTTP API, retrieval pipeline (Qdrant/BM25), or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -52,6 +52,9 @@ Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit
 
 ```text
 app/
+  chunking/
+    pdf_loader.py      # load_pdf_pages: extracts per-page text from a PDF
+    chunker.py         # chunk_pages: splits JLS pages into heading-scoped RetrievedChunks
   config/
     settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
   graph/
@@ -64,6 +67,7 @@ app/
     outputs.py       # ReasoningResult
     retrieval.py      # RetrievedChunk
 tests/
+  chunking/
   config/
   graph/
   llm/
@@ -92,6 +96,8 @@ python -m mypy                    # type check
 * No Qdrant or BM25 retrieval integration yet.
 * The LLM client (`app/llm/client.py`) is implemented and unit-tested with deterministic fakes but is not yet wired into any graph node.
 * The memory store (`app/memory/store.py`) is in-process and session-scoped only; it is not persisted and is not yet wired into any graph node.
+* The JLS chunker (`app/chunking/`) is implemented and unit-tested but is not yet wired into any indexing pipeline (no Qdrant/BM25 index yet).
+* `tests/chunking/test_jls_integration.py` requires a real `jls25.pdf` placed one directory above the repository root and is not currently skipped when the file is absent — it will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * No Docker or Docker Compose setup yet.
 * No CI pipeline yet.
 * No E2E tests yet.
