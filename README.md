@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. Every step in the planned architecture below now has a standalone, unit-tested implementation — conversation understanding, memory, intent resolution, hybrid search, reranking, context evaluation, query rewriting, reasoning, and answer generation — but none of them are wired together into an actual LangGraph graph yet, and there is no HTTP API or Docker setup. See [Current Limitations](#current-limitations) for what remains before this is an end-to-end system.
+This project is in early development. Every step in the planned architecture below now has a standalone, unit-tested implementation, and each one is now wrapped in a `GraphState`-reading/writing node adapter under `app/nodes/` (`ConversationUnderstandingNode`, `MemoryRetrievalNode`, `ResolveIntentNode`, `RetrieveNode`, `RerankNode`, `ContextEvaluationNode`, `RewriteRetrievalQueryNode`, `ReasoningNode`, `GenerationNode`). These nodes are not yet assembled into an actual compiled LangGraph `StateGraph` — there is no graph-builder module, no conditional retry-edge logic, and no HTTP API or Docker setup. See [Current Limitations](#current-limitations) for what remains before this is an end-to-end system.
 
 ## Architecture (Planned)
 
@@ -73,6 +73,16 @@ app/
     settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
   graph/
     state.py        # LangGraph GraphState and initial-state factory
+  nodes/
+    conversation_understanding.py  # ConversationUnderstandingNode
+    memory_retrieval.py             # MemoryRetrievalNode
+    resolve_intent.py               # ResolveIntentNode
+    retrieve.py                     # RetrieveNode (hybrid search)
+    rerank.py                       # RerankNode
+    context_evaluation.py           # ContextEvaluationNode
+    rewrite_retrieval_query.py      # RewriteRetrievalQueryNode
+    reasoning.py                    # ReasoningNode
+    generation.py                   # GenerationNode
   llm/
     client.py        # StructuredLlmClient protocol, OpenAiLlmClient, create_chat_model
     embeddings.py     # EmbeddingClient protocol, OpenAiEmbeddingClient, create_embeddings_model
@@ -99,6 +109,7 @@ tests/
   llm/
   memory/
   models/
+  nodes/
   reasoning/
   reranking/
   retrieval/
@@ -134,7 +145,8 @@ python -m mypy                    # type check
 * The context evaluator (`app/evaluation/context_evaluator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list is judged insufficient without an LLM call); it is not yet wired into any graph node.
 * The retrieval query rewriter (`app/retrieval/query_rewriter.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node, so the architecture's one-retry-on-insufficient-context loop does not yet exist end-to-end (evaluator → rewriter → re-search → single retry limit are still disconnected pieces).
 * The reasoning service (`app/reasoning/service.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list short-circuits to an ungrounded result without an LLM call); it is not yet wired into any graph node.
-* The answer generator (`app/generation/answer_generator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it turns a `ReasoningResult` and source passages into the final user-facing `answer` string. It is not yet wired into any graph node. With this piece in place, every node in the planned architecture diagram has a standalone implementation, but there is still no LangGraph graph connecting them into an actual end-to-end pipeline.
+* The answer generator (`app/generation/answer_generator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it turns a `ReasoningResult` and source passages into the final user-facing `answer` string.
+* `app/nodes/` wraps every business-logic service in a `GraphState`-reading/writing callable node, but there is still no `StateGraph` builder module assembling them into a compiled graph, no conditional edge implementing the one-retry-on-insufficient-context loop, and nothing persists `memory_context` back into `MemoryStore` after a turn completes.
 * `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.

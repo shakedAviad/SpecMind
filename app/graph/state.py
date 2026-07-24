@@ -11,12 +11,17 @@ class GraphState(TypedDict, total=False):
     resolved_question: str
     retrieval_query: str
 
+    is_follow_up: bool
+    standalone_question: str | None
+    missing_context: str | None
+
     memory_context: list[str]
 
     retrieved_chunks: list[RetrievedChunk]
     reranked_chunks: list[RetrievedChunk]
 
     context_is_sufficient: bool
+    missing_information: str | None
     retry_count: int
 
     reasoning: ReasoningResult
