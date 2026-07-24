@@ -30,7 +30,7 @@ def _build_test_app(graph: _FakeGraph) -> FastAPI:
     return app
 
 
-def test_ask_returns_the_graph_answer() -> None:
+def test_ask_returns_the_graph_answer_and_echoes_the_provided_session_id() -> None:
     fake_graph = _FakeGraph({"answer": "Generic array creation is prohibited because ..."})
     client = TestClient(_build_test_app(fake_graph))
 
@@ -43,7 +43,23 @@ def test_ask_returns_the_graph_answer() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"answer": "Generic array creation is prohibited because ..."}
+    assert response.json() == {
+        "session_id": "session-1",
+        "answer": "Generic array creation is prohibited because ...",
+    }
+
+
+def test_ask_generates_a_session_id_when_none_is_provided() -> None:
+    fake_graph = _FakeGraph({"answer": "an answer"})
+    client = TestClient(_build_test_app(fake_graph))
+
+    response = client.post("/ask", json={"question": "What is type erasure?"})
+
+    assert response.status_code == 200
+    generated_session_id = response.json()["session_id"]
+    assert generated_session_id
+    assert fake_graph.received_state is not None
+    assert fake_graph.received_state["session_id"] == generated_session_id
 
 
 def test_ask_invokes_the_graph_with_the_initial_state() -> None:
