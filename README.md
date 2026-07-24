@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. Every step in the planned architecture below now has a standalone, unit-tested implementation, and each one is now wrapped in a `GraphState`-reading/writing node adapter under `app/nodes/` (`ConversationUnderstandingNode`, `MemoryRetrievalNode`, `ResolveIntentNode`, `RetrieveNode`, `RerankNode`, `ContextEvaluationNode`, `RewriteRetrievalQueryNode`, `ReasoningNode`, `GenerationNode`). These nodes are not yet assembled into an actual compiled LangGraph `StateGraph` — there is no graph-builder module, no conditional retry-edge logic, and no HTTP API or Docker setup. See [Current Limitations](#current-limitations) for what remains before this is an end-to-end system.
+This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph: `app/graph/builder.py` (`build_graph`) wires all nine nodes — conversation understanding, memory retrieval, intent resolution, hybrid search, reranking, context evaluation, a conditional one-retry loop (rewrite query → re-search → re-rank → re-evaluate, at most once), reasoning, and generation — into a compiled `StateGraph` that can be invoked end-to-end with `graph.ainvoke(initial_state)`. There is still no HTTP API, no persistence of `memory_context` back into `MemoryStore` after a turn, and no Docker setup. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
 
 ## Architecture (Planned)
 
@@ -73,6 +73,7 @@ app/
     settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
   graph/
     state.py        # LangGraph GraphState and initial-state factory
+    builder.py       # build_graph: compiles the full StateGraph with the one-retry loop
   nodes/
     conversation_understanding.py  # ConversationUnderstandingNode
     memory_retrieval.py             # MemoryRetrievalNode
@@ -146,7 +147,10 @@ python -m mypy                    # type check
 * The retrieval query rewriter (`app/retrieval/query_rewriter.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node, so the architecture's one-retry-on-insufficient-context loop does not yet exist end-to-end (evaluator → rewriter → re-search → single retry limit are still disconnected pieces).
 * The reasoning service (`app/reasoning/service.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list short-circuits to an ungrounded result without an LLM call); it is not yet wired into any graph node.
 * The answer generator (`app/generation/answer_generator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it turns a `ReasoningResult` and source passages into the final user-facing `answer` string.
-* `app/nodes/` wraps every business-logic service in a `GraphState`-reading/writing callable node, but there is still no `StateGraph` builder module assembling them into a compiled graph, no conditional edge implementing the one-retry-on-insufficient-context loop, and nothing persists `memory_context` back into `MemoryStore` after a turn completes.
+* `app/graph/builder.py` compiles the full pipeline into a working `StateGraph` with the one-retry-on-insufficient-context loop, verified end-to-end with fakes in `tests/graph/test_builder.py` (sufficient on first try, retries once then succeeds, retries once then reasons anyway when still insufficient). However:
+  * Nothing persists `memory_context` back into `MemoryStore` after a turn completes (the graph reads memory but never writes to it).
+  * There is no FastAPI application invoking this graph — it can only be exercised from Python/tests today.
+  * The graph uses in-process node instances constructed directly with fakes/real services in tests; there is no application-level composition root wiring real `Settings`, `OpenAiLlmClient`, `VectorSearch`, etc. into `build_graph` for actual use.
 * `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.
