@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.outputs import ConversationUnderstandingResult, ReasoningResult, RerankResult
+from app.models.outputs import (
+    ContextEvaluationResult,
+    ConversationUnderstandingResult,
+    IntentResolution,
+    ReasoningResult,
+    RerankResult,
+)
 
 
 def test_reasoning_result_accepts_valid_fields() -> None:
@@ -79,3 +85,40 @@ def test_conversation_understanding_result_defaults_optional_fields_to_none() ->
 def test_conversation_understanding_result_rejects_missing_required_field() -> None:
     with pytest.raises(ValidationError):
         ConversationUnderstandingResult()
+
+
+def test_intent_resolution_accepts_valid_fields() -> None:
+    intent_resolution = IntentResolution(
+        resolved_question="Does type erasure also apply to arrays?",
+        retrieval_query="type erasure arrays",
+    )
+
+    assert intent_resolution.resolved_question == "Does type erasure also apply to arrays?"
+    assert intent_resolution.retrieval_query == "type erasure arrays"
+
+
+def test_intent_resolution_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        IntentResolution(resolved_question="What is type erasure?")
+
+
+def test_context_evaluation_result_accepts_sufficient_context() -> None:
+    result = ContextEvaluationResult(is_sufficient=True)
+
+    assert result.is_sufficient is True
+    assert result.missing_information is None
+
+
+def test_context_evaluation_result_accepts_insufficient_context() -> None:
+    result = ContextEvaluationResult(
+        is_sufficient=False,
+        missing_information="the rule the question asks about",
+    )
+
+    assert result.is_sufficient is False
+    assert result.missing_information == "the rule the question asks about"
+
+
+def test_context_evaluation_result_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        ContextEvaluationResult()
