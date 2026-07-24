@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, Qdrant-backed vector search, a BM25 lexical search, a hybrid search that merges and deduplicates both, an LLM-based reranker, an LLM-based conversation-understanding (follow-up detection) step, an LLM-based intent resolver, an LLM-based context sufficiency evaluator, and an LLM-based retrieval query rewriter. There is no HTTP API, LangGraph wiring of these nodes, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, Qdrant-backed vector search, a BM25 lexical search, a hybrid search that merges and deduplicates both, an LLM-based reranker, an LLM-based conversation-understanding (follow-up detection) step, an LLM-based intent resolver, an LLM-based context sufficiency evaluator, an LLM-based retrieval query rewriter, and an LLM-based grounded reasoning service. There is no HTTP API, LangGraph wiring of these nodes, or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -65,6 +65,8 @@ app/
     resolver.py        # IntentResolver: LLM-based question resolution + retrieval query
   evaluation/
     context_evaluator.py  # ContextEvaluator: LLM-based sufficiency judgment over retrieved passages
+  reasoning/
+    service.py         # ReasoningService: LLM-based grounded reasoning over retrieved passages
   config/
     settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
   graph/
@@ -94,6 +96,7 @@ tests/
   llm/
   memory/
   models/
+  reasoning/
   reranking/
   retrieval/
 ```
@@ -127,6 +130,7 @@ python -m mypy                    # type check
 * The intent resolver (`app/intent/resolver.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node and is not yet connected to the memory store (its `memory_context` must currently be supplied by the caller).
 * The context evaluator (`app/evaluation/context_evaluator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list is judged insufficient without an LLM call); it is not yet wired into any graph node.
 * The retrieval query rewriter (`app/retrieval/query_rewriter.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it is not yet wired into any graph node, so the architecture's one-retry-on-insufficient-context loop does not yet exist end-to-end (evaluator → rewriter → re-search → single retry limit are still disconnected pieces).
+* The reasoning service (`app/reasoning/service.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list short-circuits to an ungrounded result without an LLM call); it is not yet wired into any graph node, and there is no generation step yet to turn its structured output into a final answer.
 * `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.

@@ -2,9 +2,28 @@ from pydantic import BaseModel, Field
 
 
 class ReasoningResult(BaseModel):
-    relevant_points: list[str]
-    conclusion: str
-    source_chunk_indexes: list[int]
+    relevant_points: list[str] = Field(
+        description=(
+            "Concise, specific facts or rules drawn directly from the supplied "
+            "passages that bear on the question. Omit anything not relevant to "
+            "the question."
+        )
+    )
+
+    conclusion: str = Field(
+        description=(
+            "A concise, direct statement of what the passages establish about "
+            "the question, based only on the relevant points. State plainly "
+            "when the passages do not support an answer, instead of guessing."
+        )
+    )
+
+    source_chunk_indexes: list[int] = Field(
+        description=(
+            "Indexes, from the numbered passage list, of every passage that "
+            "supports a relevant point or the conclusion."
+        )
+    )
 
 
 class RerankResult(BaseModel):

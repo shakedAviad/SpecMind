@@ -33,6 +33,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/reranking/llm_reranker.py" = ["E501"]
+"app/retrieval/query_rewriter.py" = ["E501"]
+"app/reasoning/service.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
