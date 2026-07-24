@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, and Qdrant-backed vector search. There is no HTTP API, BM25 hybrid retrieval, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, a session-scoped in-memory store, a JLS PDF loader and chunker, an embedding client, Qdrant-backed vector search, and a BM25 lexical search. There is no HTTP API, hybrid-search fusion of the two retrieval methods, or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -73,6 +73,7 @@ app/
     retrieval.py      # RetrievedChunk
   retrieval/
     vector_search.py  # VectorSearch: Qdrant collection management, ingest, and search
+    bm25_search.py     # Bm25Search: in-memory BM25 lexical search over indexed chunks
 tests/
   chunking/
   config/
@@ -101,12 +102,13 @@ python -m mypy                    # type check
 ## Current Limitations
 
 * No FastAPI application or HTTP endpoints yet.
-* No BM25 retrieval integration yet.
+* No hybrid-search fusion between vector search and BM25 yet — the two retrieval methods exist independently.
 * The LLM client (`app/llm/client.py`) is implemented and unit-tested with deterministic fakes but is not yet wired into any graph node.
 * The memory store (`app/memory/store.py`) is in-process and session-scoped only; it is not persisted and is not yet wired into any graph node.
-* The JLS chunker (`app/chunking/`) is implemented and unit-tested but is not yet wired into any indexing pipeline (no ingestion entry point/script exists yet — `VectorSearch.ingest` must currently be called manually).
+* The JLS chunker (`app/chunking/`) is implemented and unit-tested but is not yet wired into any indexing pipeline (no ingestion entry point/script exists yet — `VectorSearch.ingest`/`Bm25Search.index` must currently be called manually).
 * Qdrant vector search (`app/retrieval/vector_search.py`) is implemented and tested against an in-memory Qdrant client but is not yet wired into any graph node, and there is no running Qdrant service or Docker setup yet.
-* `tests/chunking/test_jls_integration.py` requires a real `jls25.pdf` placed one directory above the repository root and is not currently skipped when the file is absent — it will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
+* BM25 lexical search (`app/retrieval/bm25_search.py`) is implemented and in-process only (rebuilt from a `list[RetrievedChunk]` in memory); it is not yet wired into any graph node and has no persistence.
+* `tests/chunking/test_jls_integration.py` and `tests/retrieval/test_bm25_search_jls_integration.py` both require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.
 * `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before a CI pipeline pins a specific Python version.
 * No Docker or Docker Compose setup yet.
 * No CI pipeline yet.
