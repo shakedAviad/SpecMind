@@ -8,7 +8,14 @@ class ReasoningResult(BaseModel):
 
 
 class RerankResult(BaseModel):
-    relevant_chunk_indexes: list[int]
+    relevant_chunk_indexes: list[int] = Field(
+        description=(
+            "Indexes of the candidate passages that provide meaningful support for "
+            "answering the question, exactly matching the provided candidate "
+            "indexes, ordered from most useful to least useful. Empty when no "
+            "passage provides meaningful support."
+        )
+    )
 
 
 class ConversationUnderstandingResult(BaseModel):
