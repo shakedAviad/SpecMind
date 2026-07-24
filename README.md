@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph, and a composition root now wires real services (OpenAI LLM/embedding clients, Qdrant, BM25 over the indexed JLS PDF) into it: `app/container.py` (`create_app_container`) builds a ready-to-use `AppContainer` holding the compiled graph, and `app/main.py` exposes a bare `FastAPI` app that builds this container on startup via its lifespan. There are still no HTTP routes (not even a health endpoint), no persistence of `memory_context` back into `MemoryStore` after a turn, and no Docker setup. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
+This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph, wired into a real composition root (`app/container.py`), and exposed over HTTP: `POST /ask` (`app/api/routes.py`) accepts a session ID and question and returns the graph's generated answer. There is still no liveness/readiness health endpoint, no persistence of `memory_context` back into `MemoryStore` after a turn, and no Docker setup. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
 
 ## Architecture (Planned)
 
@@ -59,6 +59,8 @@ Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit
 app/
   main.py            # FastAPI app; builds the AppContainer on startup via lifespan
   container.py        # create_app_container: composition root wiring real services into build_graph
+  api/
+    routes.py          # POST /ask: invokes the graph and returns the generated answer
   conversation/
     understanding.py   # ConversationUnderstanding: LLM-based follow-up detection
   chunking/
@@ -95,6 +97,7 @@ app/
   models/
     outputs.py       # ReasoningResult, RerankResult, ConversationUnderstandingResult, IntentResolution, ContextEvaluationResult, QueryRewriteResult, GeneratedAnswer
     retrieval.py      # RetrievedChunk
+    api.py            # AskRequest, AskResponse
   reranking/
     llm_reranker.py    # LlmReranker: LLM-based relevance reranking of candidate chunks
   retrieval/
@@ -103,6 +106,7 @@ app/
     hybrid_search.py   # HybridSearch: merges and deduplicates vector + BM25 results
     query_rewriter.py  # RetrievalQueryRewriter: LLM-based query revision for the one-retry step
 tests/
+  api/
   chunking/
   config/
   conversation/
@@ -151,8 +155,8 @@ python -m mypy                    # type check
 * The reasoning service (`app/reasoning/service.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient` (an empty candidate list short-circuits to an ungrounded result without an LLM call); it is not yet wired into any graph node.
 * The answer generator (`app/generation/answer_generator.py`) is implemented and unit-tested with a deterministic fake `StructuredLlmClient`; it turns a `ReasoningResult` and source passages into the final user-facing `answer` string.
 * `app/graph/builder.py` compiles the full pipeline into a working `StateGraph` with the one-retry-on-insufficient-context loop, verified end-to-end with fakes in `tests/graph/test_builder.py` (sufficient on first try, retries once then succeeds, retries once then reasons anyway when still insufficient).
-* `app/container.py` now wires real services (not fakes) into that graph — verified in `tests/test_container.py` against an in-memory Qdrant client, but that test still requires the real, untracked `jls25.pdf` (see below). `app/main.py`'s `FastAPI` app builds this container on startup, but:
-  * There are no HTTP routes at all yet — not a question-answering endpoint, not even a liveness/readiness health check.
+* `app/container.py` now wires real services (not fakes) into that graph — verified in `tests/test_container.py` against an in-memory Qdrant client, but that test still requires the real, untracked `jls25.pdf` (see below). `app/main.py`'s `FastAPI` app builds this container on startup and exposes it via `POST /ask` (`app/api/routes.py`), tested with FastAPI's `TestClient` and a fake graph. However:
+  * **There is still no liveness/readiness health endpoint** — Docker/Compose work is intentionally on hold until one exists, since a container health check must not rely on `/ask` (which performs a full, expensive, real-LLM-calling graph invocation) or on "the process is running" as a substitute for real readiness.
   * Nothing persists `memory_context` back into `MemoryStore` after a turn completes (the graph reads memory but never writes to it).
   * The BM25 index is rebuilt from the full JLS PDF synchronously during container creation (via `load_pdf_pages`/`chunk_pages`), with no separate ingestion step, caching, or progress reporting.
 * `tests/chunking/test_jls_integration.py`, `tests/retrieval/test_bm25_search_jls_integration.py`, and now `tests/test_container.py` all require a real `jls25.pdf` placed one directory above the repository root and are not currently skipped when the file is absent — they will fail with a file-not-found error on any machine or CI runner without that file. There is no CI pipeline yet, so this has not surfaced there.

@@ -1,0 +1,27 @@
+import pytest
+from pydantic import ValidationError
+
+from app.models.api import AskRequest, AskResponse
+
+
+def test_ask_request_accepts_valid_fields() -> None:
+    request = AskRequest(session_id="session-1", question="What is type erasure?")
+
+    assert request.session_id == "session-1"
+    assert request.question == "What is type erasure?"
+
+
+def test_ask_request_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        AskRequest(session_id="session-1")
+
+
+def test_ask_response_accepts_valid_fields() -> None:
+    response = AskResponse(answer="Generic array creation is prohibited because ...")
+
+    assert response.answer == "Generic array creation is prohibited because ..."
+
+
+def test_ask_response_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        AskResponse()
