@@ -4,7 +4,7 @@ A Python RAG application for answering questions about the Java Language Specifi
 
 ## Project Status
 
-This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, and environment-based settings. There is no HTTP API, retrieval pipeline, or Docker setup yet — see [Current Limitations](#current-limitations).
+This project is in early development. The current codebase includes the core Pydantic models, the LangGraph state definition, a structured-output LLM client, environment-based settings, and a session-scoped in-memory store. There is no HTTP API, retrieval pipeline, or Docker setup yet — see [Current Limitations](#current-limitations).
 
 ## Architecture (Planned)
 
@@ -58,6 +58,8 @@ app/
     state.py        # LangGraph GraphState and initial-state factory
   llm/
     client.py        # StructuredLlmClient protocol, OpenAiLlmClient, create_chat_model
+  memory/
+    store.py          # MemoryStore: session-scoped, in-memory, isolated per session
   models/
     outputs.py       # ReasoningResult
     retrieval.py      # RetrievedChunk
@@ -65,6 +67,7 @@ tests/
   config/
   graph/
   llm/
+  memory/
   models/
 ```
 
@@ -88,6 +91,7 @@ python -m mypy                    # type check
 * No FastAPI application or HTTP endpoints yet.
 * No Qdrant or BM25 retrieval integration yet.
 * The LLM client (`app/llm/client.py`) is implemented and unit-tested with deterministic fakes but is not yet wired into any graph node.
+* The memory store (`app/memory/store.py`) is in-process and session-scoped only; it is not persisted and is not yet wired into any graph node.
 * No Docker or Docker Compose setup yet.
 * No CI pipeline yet.
 * No E2E tests yet.
