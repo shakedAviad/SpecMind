@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.outputs import ReasoningResult, RerankResult
+from app.models.outputs import ConversationUnderstandingResult, ReasoningResult, RerankResult
 
 
 def test_reasoning_result_accepts_valid_fields() -> None:
@@ -45,3 +45,37 @@ def test_rerank_result_accepts_empty_indexes() -> None:
 def test_rerank_result_rejects_wrong_type_for_relevant_chunk_indexes() -> None:
     with pytest.raises(ValidationError):
         RerankResult(relevant_chunk_indexes=["not-an-int"])
+
+
+def test_conversation_understanding_result_accepts_a_standalone_question() -> None:
+    result = ConversationUnderstandingResult(
+        is_follow_up=False,
+        standalone_question="What is type erasure?",
+    )
+
+    assert result.is_follow_up is False
+    assert result.standalone_question == "What is type erasure?"
+    assert result.missing_context is None
+
+
+def test_conversation_understanding_result_accepts_a_follow_up() -> None:
+    result = ConversationUnderstandingResult(
+        is_follow_up=True,
+        missing_context="the earlier topic being compared",
+    )
+
+    assert result.is_follow_up is True
+    assert result.standalone_question is None
+    assert result.missing_context == "the earlier topic being compared"
+
+
+def test_conversation_understanding_result_defaults_optional_fields_to_none() -> None:
+    result = ConversationUnderstandingResult(is_follow_up=False)
+
+    assert result.standalone_question is None
+    assert result.missing_context is None
+
+
+def test_conversation_understanding_result_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        ConversationUnderstandingResult()
