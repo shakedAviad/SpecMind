@@ -8,3 +8,7 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
+
+
+class HealthStatus(BaseModel):
+    status: str

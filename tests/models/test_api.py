@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.api import AskRequest, AskResponse
+from app.models.api import AskRequest, AskResponse, HealthStatus
 
 
 def test_ask_request_accepts_valid_fields() -> None:
@@ -25,3 +25,14 @@ def test_ask_response_accepts_valid_fields() -> None:
 def test_ask_response_rejects_missing_required_field() -> None:
     with pytest.raises(ValidationError):
         AskResponse()
+
+
+def test_health_status_accepts_valid_fields() -> None:
+    status = HealthStatus(status="ok")
+
+    assert status.status == "ok"
+
+
+def test_health_status_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        HealthStatus()
