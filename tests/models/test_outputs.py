@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from app.models.outputs import (
     ContextEvaluationResult,
     ConversationUnderstandingResult,
+    GeneratedAnswer,
     IntentResolution,
     QueryRewriteResult,
     ReasoningResult,
@@ -134,3 +135,14 @@ def test_query_rewrite_result_accepts_valid_fields() -> None:
 def test_query_rewrite_result_rejects_missing_required_field() -> None:
     with pytest.raises(ValidationError):
         QueryRewriteResult()
+
+
+def test_generated_answer_accepts_valid_fields() -> None:
+    result = GeneratedAnswer(answer="Generic array creation is prohibited because ...")
+
+    assert result.answer == "Generic array creation is prohibited because ..."
+
+
+def test_generated_answer_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        GeneratedAnswer()

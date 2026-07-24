@@ -111,3 +111,14 @@ class QueryRewriteResult(BaseModel):
             "previous query."
         )
     )
+
+
+class GeneratedAnswer(BaseModel):
+    answer: str = Field(
+        description=(
+            "The complete natural-language answer for the user, based only on "
+            "the supplied reasoning and passages. States plainly when the "
+            "available information does not fully answer the question, "
+            "instead of guessing or omitting that fact."
+        )
+    )
