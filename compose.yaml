@@ -1,0 +1,26 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      JLS_PDF_PATH: /data/jls25.pdf
+    volumes:
+      - ${JLS_PDF_HOST_PATH:-../jls25.pdf}:/data/jls25.pdf:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
