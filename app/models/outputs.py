@@ -81,3 +81,14 @@ class ContextEvaluationResult(BaseModel):
             "the missing information says."
         ),
     )
+
+
+class QueryRewriteResult(BaseModel):
+    retrieval_query: str = Field(
+        description=(
+            "A revised search query for retrieving passages from the Java "
+            "Language Specification, targeting the described gap in the "
+            "previous search results. Must differ meaningfully from the "
+            "previous query."
+        )
+    )

@@ -5,6 +5,7 @@ from app.models.outputs import (
     ContextEvaluationResult,
     ConversationUnderstandingResult,
     IntentResolution,
+    QueryRewriteResult,
     ReasoningResult,
     RerankResult,
 )
@@ -122,3 +123,14 @@ def test_context_evaluation_result_accepts_insufficient_context() -> None:
 def test_context_evaluation_result_rejects_missing_required_field() -> None:
     with pytest.raises(ValidationError):
         ContextEvaluationResult()
+
+
+def test_query_rewrite_result_accepts_valid_fields() -> None:
+    result = QueryRewriteResult(retrieval_query="reifiable types generic array creation")
+
+    assert result.retrieval_query == "reifiable types generic array creation"
+
+
+def test_query_rewrite_result_rejects_missing_required_field() -> None:
+    with pytest.raises(ValidationError):
+        QueryRewriteResult()
