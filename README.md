@@ -1,34 +1,92 @@
 # SpecMind
 
-A Python RAG application for answering questions about the Java Language Specification (JLS), built with FastAPI, LangGraph, Qdrant, and BM25 hybrid retrieval.
+SpecMind is a Retrieval-Augmented Generation (RAG) service that answers questions about the Java Language Specification (JLS). It combines hybrid retrieval (vector + BM25) with a multi-stage LangGraph pipeline that resolves conversational context, retrieves and evaluates evidence, and generates grounded, natural-language answers over HTTP.
 
-## Project Status
+The goal is to let someone ask JLS questions in plain English — including follow-ups that depend on earlier turns — and get an answer that's actually backed by the text of the spec, not a hallucinated paraphrase of it.
 
-This project is in early development, but the core RAG pipeline is now a fully assembled, working LangGraph graph, wired into a real composition root (`app/container.py`), and exposed over HTTP: `POST /ask` (`app/api/routes.py`) accepts a session ID and question and returns the graph's generated answer, and `GET /health/live` / `GET /health/ready` (`app/api/health.py`) now exist. The whole stack (app + Qdrant, JLS PDF included) runs with a single `docker compose up --build -d`, and the API can be used directly from a browser via the auto-generated docs at `/docs` — see [Docker](#docker). There is still no persistence of `memory_context` back into `MemoryStore` after a turn. See [Current Limitations](#current-limitations) for what remains before this is a deployable system.
+## Features
 
-## Architecture (Planned)
+* Hybrid retrieval combining Qdrant vector search with BM25 lexical search
+* Multi-stage RAG pipeline orchestrated as a LangGraph `StateGraph`
+* Conversation understanding for follow-up questions across turns
+* Session-scoped memory retrieval
+* LLM-based intent resolution and retrieval query construction
+* LLM-based reranking of retrieved passages
+* Context sufficiency evaluation with a one-shot query-rewrite retry
+* Grounded reasoning and structured, LLM-generated final answers
+* FastAPI HTTP interface with auto-generated Swagger/Redoc docs
+* Single-command Docker Compose setup (app + Qdrant + JLS PDF)
 
-```text
-Question
-→ Conversation Understanding
-→ Memory Retrieval
-→ Resolve Intent
-→ Hybrid Search
-→ Rerank
-→ Context Evaluation
-→ Reasoning
-→ Generation
+## Configuration
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `OPENAI_API_KEY` | Yes | — | Used by the LLM and embedding clients |
+| `OPENAI_MODEL` | No | `gpt-4.1-mini` | Chat model |
+| `OPENAI_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model |
+| `OPENAI_EMBEDDING_DIMENSIONS` | No | `1536` | Must match the embedding model's vector size |
+| `QDRANT_URL` | No | `http://localhost:6333` | Qdrant endpoint |
+| `QDRANT_COLLECTION_NAME` | No | `jls_chunks` | Qdrant collection for JLS chunks |
+| `JLS_PDF_PATH` | No | `data/jls25.pdf` | PDF used to build the BM25 index at startup |
+
+None of these are required to run the unit tests, which use deterministic fakes and an in-memory Qdrant client.
+
+## Testing
+
+### Automated Tests
+
+```bash
+python -m pytest
 ```
 
-The workflow uses one retrieval retry when retrieved context is judged insufficient; it does not retry a second time.
+Unit and integration tests against deterministic fakes — no API key, Qdrant, or Docker needed.
 
-## Prerequisites
+### End-to-End QA (AI-assisted)
 
-* Python >= 3.11 (note: `mypy` is currently configured for `python_version = "3.12"`; see [Current Limitations](#current-limitations))
-* An OpenAI API key (required to actually invoke the LLM/embedding clients; not required to run the test suite)
-* Docker and Docker Compose (only required to run via [Docker](#docker); not required for native local setup or tests)
+A manual QA test plan (`data/RAG-System-Test-Plan.md`) covers 38 conversational test cases plus a regression suite, stress-testing retrieval accuracy, hallucination resistance, and prompt-injection attempts against the real running system.
 
-## Local Setup
+**Update:** executed against the live stack on 2026-07-26 — 30 of 38 tests passed cleanly.
+
+Held up well:
+* Prompt-injection resistance (three separate attempts)
+* Reasoning across multiple JLS passages (e.g. try-with-resources exception suppression, `volatile`/happens-before)
+* Honest section citations, no fabricated numbers
+
+Failed:
+* Basic definitional questions retrieved inconsistently — "What is autoboxing?" and "difference between interface and abstract class" failed on their plain phrasing but succeeded when asked in a more elaborate way, pointing to a retrieval/query-construction bug rather than missing content
+* The predicted memory gap was confirmed in production — under an ambiguous follow-up, the system didn't fail safely, it confidently answered a different, unrelated question by latching onto a repeated keyword
+
+Full results in `data/RAG-System-Test-Results.md`.
+
+### Reproducing the QA Run
+
+Have Claude execute it:
+
+```
+Start the app per Getting Started, then run the QA test plan in data/RAG-System-Test-Plan.md
+against it via POST /ask, and write up the results in a document.
+```
+
+## Getting Started
+
+**Run the app**
+
+```bash
+cp .env.example .env        # macOS / Linux
+# copy .env.example .env    # Windows
+```
+
+Set a real `OPENAI_API_KEY` in `.env`, then:
+
+```bash
+docker compose up --build -d
+```
+
+That's the whole setup — the app and Qdrant come up together, JLS PDF included. See [Using the API](#using-the-api) to start asking questions.
+
+**Developing Locally**
+
+Only needed if you're changing code, not just running the app.
 
 ```bash
 python -m venv .venv
@@ -40,156 +98,115 @@ cp .env.example .env        # macOS / Linux
 # copy .env.example .env    # Windows
 ```
 
-## Environment Variables
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `OPENAI_API_KEY` | Yes | — | API key used by `OpenAiLlmClient` and the embedding client |
-| `OPENAI_MODEL` | No | `gpt-4.1-mini` | OpenAI chat model name |
-| `OPENAI_EMBEDDING_MODEL` | No | `text-embedding-3-small` | OpenAI embedding model name |
-| `OPENAI_EMBEDDING_DIMENSIONS` | No | `1536` | Must match the vector size produced by `OPENAI_EMBEDDING_MODEL` |
-| `QDRANT_URL` | No | `http://localhost:6333` | Qdrant endpoint |
-| `QDRANT_COLLECTION_NAME` | No | `jls_chunks` | Qdrant collection used for JLS chunks |
-| `JLS_PDF_PATH` | No | `data/jls25.pdf` | Path to the JLS PDF used to build the BM25 index at startup |
-
-Loaded via `app/config/settings.py` (`pydantic-settings`). Not required for unit tests, which use deterministic fakes and an in-memory Qdrant client.
-
-## Docker
-
-Runs the app and Qdrant together via Compose. The JLS PDF (`data/jls25.pdf`) is part of the repository and is built directly into the image, and Qdrant is started and wired up automatically — nothing external to clone or download.
-
-**One-time setup** (only step that can't be automated, since it's a secret):
-
-```bash
-cp .env.example .env        # macOS / Linux
-# copy .env.example .env    # Windows
-```
-
 Then open `.env` and set a real `OPENAI_API_KEY`.
 
-**Single command to run everything:**
+## Using the API
 
-```bash
-docker compose up --build -d
-```
+`session_id` is optional — omit it to start a new session; the server generates one and returns it so you can keep asking follow-up questions in the same conversation.
 
-This builds the image (if needed) and starts both `app` and `qdrant`, healthchecked and networked together. Re-running the same command after a code change rebuilds and restarts only what's needed.
+Other endpoints:
 
-```bash
-docker compose ps        # both services should report "healthy"
-docker compose logs -f app
-docker compose down      # stop everything
-```
-
-## Talking to the app
-
-Once the stack is up (both services `healthy`), open **`http://localhost:8000/docs`** in a browser — FastAPI's built-in Swagger UI. Expand `POST /ask`, click "Try it out", fill in just a `question` (`session_id` is optional — omit it to start a new session; the server generates one and returns it in the response for follow-up calls), and click "Execute" to get a real answer, no `curl` required. `http://localhost:8000/redoc` gives a read-only alternative view of the same API.
-
-Other endpoints, once the stack is up:
-
-* `GET http://localhost:8000/health/live` — liveness
-* `GET http://localhost:8000/health/ready` — readiness (503 until the container/graph finished building at startup)
-* `POST http://localhost:8000/ask` — `{"question": "...", "session_id": "..."}` (`session_id` optional — auto-generated and echoed back if omitted; requires a real `OPENAI_API_KEY` in `.env` to actually produce an answer)
+* `GET /health/live` — liveness
+* `GET /health/ready` — readiness (503 until the graph has finished building at startup)
 * Qdrant is also reachable directly at `http://localhost:6333`
+
+Once the app is up, open **`http://localhost:8000/docs`** — FastAPI's Swagger UI. Expand `POST /ask`, type in a question, and run it directly from the browser. No `curl` required.
+
+<img src="docs/images/swagger-ui.jpg" alt="Swagger UI" width="700">
+
+Prefer the command line?
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the difference between a class and an interface?"}'
+```
+
+## How It Works
+
+```text
+Question
+   │
+   ▼
+Conversation Understanding   — detects whether this is a follow-up and folds prior turns in
+   │
+   ▼
+Memory Retrieval              — pulls relevant session history from MemoryStore
+   │
+   ▼
+Intent Resolution             — resolves what's actually being asked and builds a retrieval query
+   │
+   ▼
+Hybrid Search                 — Qdrant vector search + BM25 over the JLS, merged and deduplicated
+   │
+   ▼
+Reranking                     — LLM reranks candidates by relevance
+   │
+   ▼
+Context Evaluation ──insufficient──► Rewrite Query ──► back to Hybrid Search (one retry only)
+   │
+   │ sufficient
+   ▼
+Reasoning                      — grounded reasoning over the retrieved passages
+   │
+   ▼
+Answer Generation              — final natural-language answer
+```
+
+If the context evaluation step judges the retrieved passages insufficient, the query is rewritten once and retrieval runs a second time. If it's still insufficient after that, the pipeline reasons over whatever was found rather than retrying indefinitely.
 
 ## Project Structure
 
+Everything is built around a single LangGraph graph; `container.py` just wires real services into it and `main.py` exposes it over HTTP.
+
 ```text
-Dockerfile
-.dockerignore
-compose.yaml
-data/
-  jls25.pdf          # Java Language Specification PDF, used to build the BM25 index at startup
 app/
-  main.py            # FastAPI app; builds the AppContainer on startup via lifespan
-  container.py        # create_app_container: composition root wiring real services into build_graph
-  api/
-    routes.py          # POST /ask: invokes the graph and returns the generated answer
-    health.py          # GET /health/live, GET /health/ready
-  conversation/
-    understanding.py   # ConversationUnderstanding: LLM-based follow-up detection
-  chunking/
-    pdf_loader.py      # load_pdf_pages: extracts per-page text from a PDF
-    chunker.py         # chunk_pages: splits JLS pages into heading-scoped RetrievedChunks
-  intent/
-    resolver.py        # IntentResolver: LLM-based question resolution + retrieval query
-  evaluation/
-    context_evaluator.py  # ContextEvaluator: LLM-based sufficiency judgment over retrieved passages
-  reasoning/
-    service.py         # ReasoningService: LLM-based grounded reasoning over retrieved passages
-  generation/
-    answer_generator.py  # AnswerGenerator: LLM-based final natural-language answer
-  config/
-    settings.py       # Environment-based Settings (OPENAI_API_KEY, OPENAI_MODEL)
-  graph/
-    state.py        # LangGraph GraphState and initial-state factory
-    builder.py       # build_graph: compiles the full StateGraph with the one-retry loop
-  nodes/
-    conversation_understanding.py  # ConversationUnderstandingNode
-    memory_retrieval.py             # MemoryRetrievalNode
-    resolve_intent.py               # ResolveIntentNode
-    retrieve.py                     # RetrieveNode (hybrid search)
-    rerank.py                       # RerankNode
-    context_evaluation.py           # ContextEvaluationNode
-    rewrite_retrieval_query.py      # RewriteRetrievalQueryNode
-    reasoning.py                    # ReasoningNode
-    generation.py                   # GenerationNode
-  llm/
-    client.py        # StructuredLlmClient protocol, OpenAiLlmClient, create_chat_model
-    embeddings.py     # EmbeddingClient protocol, OpenAiEmbeddingClient, create_embeddings_model
-  memory/
-    store.py          # MemoryStore: session-scoped, in-memory, isolated per session
-  models/
-    outputs.py       # ReasoningResult, RerankResult, ConversationUnderstandingResult, IntentResolution, ContextEvaluationResult, QueryRewriteResult, GeneratedAnswer
-    retrieval.py      # RetrievedChunk
-    api.py            # AskRequest, AskResponse, HealthStatus
-  reranking/
-    llm_reranker.py    # LlmReranker: LLM-based relevance reranking of candidate chunks
-  retrieval/
-    vector_search.py  # VectorSearch: Qdrant collection management, ingest, and search
-    bm25_search.py     # Bm25Search: in-memory BM25 lexical search over indexed chunks
-    hybrid_search.py   # HybridSearch: merges and deduplicates vector + BM25 results
-    query_rewriter.py  # RetrievalQueryRewriter: LLM-based query revision for the one-retry step
-tests/
-  api/
-  chunking/
-  config/
-  conversation/
-  evaluation/
-  generation/
-  graph/
-  intent/
-  llm/
-  memory/
-  models/
-  nodes/
-  reasoning/
-  reranking/
-  retrieval/
+  api/            # FastAPI routes and health endpoints
+  graph/          # LangGraph StateGraph definition and state
+  nodes/          # Graph node adapters (one per pipeline stage)
+  conversation/   # Conversation understanding (follow-up detection)
+  intent/         # Intent resolution
+  retrieval/      # Vector search, BM25 search, hybrid merge, query rewriting
+  reranking/      # LLM-based reranking
+  evaluation/     # Context sufficiency evaluation
+  reasoning/       # Grounded reasoning over retrieved passages
+  generation/     # Final answer generation
+  memory/         # Session-scoped MemoryStore
+  llm/            # LLM and embedding client wrappers
+  chunking/       # PDF loading and chunking for the BM25 index
+  models/         # Pydantic request/response and domain models
+  config/         # Environment-based settings
+  container.py    # Composition root
+  main.py         # FastAPI app entrypoint
+data/
+  jls25.pdf                     # Java Language Specification, used to build the BM25 index
+  RAG-System-Test-Plan.md       # Manual QA test plan (see Testing)
+  RAG-System-Test-Results.md    # Results from executing the plan above
+docs/
+  images/         # Assets referenced from this README
+tests/            # Mirrors the app/ layout, one test package per module
 ```
 
-## Running Tests
+## Future Improvements
 
-```bash
-python -m pytest
-```
+**Memory**
+* Persist `memory_context` back into `MemoryStore` after each turn.
+* Move memory out of in-process storage so it survives restarts and can be shared across multiple app replicas.
+* Have the reasoning stage flag low confidence on short, cross-topic-ambiguous follow-ups instead of confidently answering the wrong question.
 
-## Code Quality
+**Retrieval**
+* Improve retrieval consistency for semantically equivalent questions phrased differently.
+* Make the one-shot query-rewrite retry more effective at recovering from a bad initial hybrid-search pass.
 
-```bash
-python -m ruff format --check .   # formatting check
-python -m ruff format .           # apply formatting
-python -m ruff check .            # lint
-python -m mypy                    # type check
-```
+**Ingestion**
+* Replace the synchronous, full-PDF BM25 rebuild on every startup with a separate ingestion step that supports caching and progress reporting.
 
-## Current Limitations
+**Observability**
+* Make `/health/ready` check live Qdrant/LLM connectivity on each poll, rather than only confirming that startup wiring succeeded once.
 
-* The LLM client, memory store, chunker, vector search, BM25 search, hybrid search, reranker, conversation understanding, intent resolver, context evaluator, query rewriter, reasoning service, and answer generator are each implemented and unit-tested (many with deterministic fakes), and are all wired together by `app/graph/builder.py` into a working `StateGraph` with the one-retry-on-insufficient-context loop — verified end-to-end with fakes in `tests/graph/test_builder.py` (sufficient on first try, retries once then succeeds, retries once then reasons anyway when still insufficient).
-* `app/container.py` wires real services (not fakes) into that graph, exposed over HTTP via `POST /ask`. Verified by actually running the Dockerized stack and asking a real question end-to-end (real Qdrant, real OpenAI calls, real JLS PDF) — not just the in-memory client used in `tests/test_container.py`.
-* `GET /health/ready` (`app/api/health.py`) currently only checks that `app.state.container` was set during startup (which did call `vector_search.ensure_collection()` against Qdrant once) — it does not re-verify Qdrant/LLM connectivity live on every readiness poll, so a dependency that goes down *after* a successful startup would not be caught. Good enough for Docker health-check wiring today, but a candidate follow-up for a live check.
-* Nothing persists `memory_context` back into `MemoryStore` after a turn completes (the graph reads memory but never writes to it), and `MemoryStore` itself is in-process only — it does not survive an app restart, and does not currently run as a separate service, so it cannot be shared across multiple app replicas.
-* The BM25 index is rebuilt from the full JLS PDF synchronously during container/app startup (via `load_pdf_pages`/`chunk_pages`), with no separate ingestion step, caching, or progress reporting — every restart re-parses and re-chunks the entire PDF.
-* `mypy` is configured for `python_version = "3.12"` while `pyproject.toml`'s `requires-python` is `>=3.11`; this mismatch should be resolved (either raise `requires-python` or lower the mypy target) before pinning a specific Python version elsewhere.
+**Testing**
+* Add an automated end-to-end test against the real Docker stack, complementing the current fake-backed graph and container tests.
+* Automate the regression suite so it runs after any prompt, model, or index change.
 
-These will be added incrementally as the corresponding application capabilities are implemented.
+**Developer Experience**
+* Add a dedicated ingestion command/script instead of rebuilding the BM25 index as a startup side effect.
