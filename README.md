@@ -203,6 +203,7 @@ tests/            # Mirrors the app/ layout, one test package per module
 
 **Observability**
 * Make `/health/ready` check live Qdrant/LLM connectivity on each poll, rather than only confirming that startup wiring succeeded once.
+* Add structured logging across the pipeline, correlated by request/session ID, to make failures and slow stages traceable in production.
 
 **Testing**
 * Add an automated end-to-end test against the real Docker stack, complementing the current fake-backed graph and container tests.
