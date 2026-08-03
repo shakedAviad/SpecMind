@@ -45,21 +45,6 @@ Unit and integration tests against deterministic fakes — no API key, Qdrant, o
 
 A manual QA test plan (`data/RAG-System-Test-Plan.md`) covers 38 conversational test cases plus a regression suite, stress-testing retrieval accuracy, hallucination resistance, and prompt-injection attempts against the real running system.
 
-**Update:** executed against the live stack on 2026-07-26 — 30 of 38 tests passed cleanly.
-
-Held up well:
-* Prompt-injection resistance (three separate attempts)
-* Reasoning across multiple JLS passages (e.g. try-with-resources exception suppression, `volatile`/happens-before)
-* Honest section citations, no fabricated numbers
-
-Failed:
-* Basic definitional questions retrieved inconsistently — "What is autoboxing?" and "difference between interface and abstract class" failed on their plain phrasing but succeeded when asked in a more elaborate way, pointing to a retrieval/query-construction bug rather than missing content
-* The predicted memory gap was confirmed in production — under an ambiguous follow-up, the system didn't fail safely, it confidently answered a different, unrelated question by latching onto a repeated keyword
-
-Full results in `data/RAG-System-Test-Results.md`.
-
-**Update (2026-08-03):** the two root causes behind most of the findings above were fixed — `MemoryStore.add_facts` is now wired via a `persist_memory` graph node that runs after generation, and `VectorSearch.ingest` is now actually called at startup (batched at 100 chunks/request, after an unbatched single upsert of the full 1,375-chunk corpus caused Qdrant connection resets). Re-running the full plan against the live stack afterward resolved all 4 original HIGH-severity findings and 3 of 4 MEDIUM findings; two LOW-severity polish nits and one compound-question retrieval inconsistency remain open. Full comparison in `data/RAG-System-Test-Results-Rerun.md`.
-
 ### Reproducing the QA Run
 
 Have Claude execute it:
