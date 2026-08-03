@@ -6,6 +6,7 @@ from app.nodes.context_evaluation import ContextEvaluationNode
 from app.nodes.conversation_understanding import ConversationUnderstandingNode
 from app.nodes.generation import GenerationNode
 from app.nodes.memory_retrieval import MemoryRetrievalNode
+from app.nodes.persist_memory import PersistMemoryNode
 from app.nodes.reasoning import ReasoningNode
 from app.nodes.rerank import RerankNode
 from app.nodes.resolve_intent import ResolveIntentNode
@@ -23,6 +24,7 @@ def build_graph(
     rewrite_retrieval_query_node: RewriteRetrievalQueryNode,
     reasoning_node: ReasoningNode,
     generation_node: GenerationNode,
+    persist_memory_node: PersistMemoryNode,
 ) -> CompiledStateGraph[GraphState, None, GraphState, GraphState]:
     graph = StateGraph(GraphState)
 
@@ -35,6 +37,7 @@ def build_graph(
     graph.add_node("rewrite_retrieval_query", rewrite_retrieval_query_node)
     graph.add_node("reasoning", reasoning_node)
     graph.add_node("generation", generation_node)
+    graph.add_node("persist_memory", persist_memory_node)
 
     graph.set_entry_point("conversation_understanding")
     graph.add_edge("conversation_understanding", "memory_retrieval")
@@ -54,7 +57,8 @@ def build_graph(
 
     graph.add_edge("rewrite_retrieval_query", "retrieve")
     graph.add_edge("reasoning", "generation")
-    graph.add_edge("generation", END)
+    graph.add_edge("generation", "persist_memory")
+    graph.add_edge("persist_memory", END)
 
     return graph.compile()
 

@@ -9,7 +9,7 @@ The goal is to let someone ask JLS questions in plain English — including foll
 * Hybrid retrieval combining Qdrant vector search with BM25 lexical search
 * Multi-stage RAG pipeline orchestrated as a LangGraph `StateGraph`
 * Conversation understanding for follow-up questions across turns
-* Session-scoped memory retrieval
+* Session-scoped conversational memory, persisted back after every turn
 * LLM-based intent resolution and retrieval query construction
 * LLM-based reranking of retrieved passages
 * Context sufficiency evaluation with a one-shot query-rewrite retry
@@ -57,6 +57,8 @@ Failed:
 * The predicted memory gap was confirmed in production — under an ambiguous follow-up, the system didn't fail safely, it confidently answered a different, unrelated question by latching onto a repeated keyword
 
 Full results in `data/RAG-System-Test-Results.md`.
+
+**Update (2026-08-03):** the two root causes behind most of the findings above were fixed — `MemoryStore.add_facts` is now wired via a `persist_memory` graph node that runs after generation, and `VectorSearch.ingest` is now actually called at startup (batched at 100 chunks/request, after an unbatched single upsert of the full 1,375-chunk corpus caused Qdrant connection resets). Re-running the full plan against the live stack afterward resolved all 4 original HIGH-severity findings and 3 of 4 MEDIUM findings; two LOW-severity polish nits and one compound-question retrieval inconsistency remain open. Full comparison in `data/RAG-System-Test-Results-Rerun.md`.
 
 ### Reproducing the QA Run
 
@@ -151,6 +153,9 @@ Reasoning                      — grounded reasoning over the retrieved passage
    │
    ▼
 Answer Generation              — final natural-language answer
+   │
+   ▼
+Memory Persistence              — saves a fact from this turn into MemoryStore for future turns
 ```
 
 If the context evaluation step judges the retrieved passages insufficient, the query is rewritten once and retrieval runs a second time. If it's still insufficient after that, the pipeline reasons over whatever was found rather than retrying indefinitely.
@@ -190,16 +195,15 @@ tests/            # Mirrors the app/ layout, one test package per module
 ## Future Improvements
 
 **Memory**
-* Persist `memory_context` back into `MemoryStore` after each turn.
 * Move memory out of in-process storage so it survives restarts and can be shared across multiple app replicas.
 * Have the reasoning stage flag low confidence on short, cross-topic-ambiguous follow-ups instead of confidently answering the wrong question.
 
 **Retrieval**
-* Improve retrieval consistency for semantically equivalent questions phrased differently.
+* Improve retrieval consistency for semantically equivalent questions phrased differently, including compound questions where one half of the question is dropped.
 * Make the one-shot query-rewrite retry more effective at recovering from a bad initial hybrid-search pass.
 
 **Ingestion**
-* Replace the synchronous, full-PDF BM25 rebuild on every startup with a separate ingestion step that supports caching and progress reporting.
+* Replace the synchronous, full-PDF BM25 rebuild and vector-embedding ingestion on every startup with a separate ingestion step that supports caching and progress reporting.
 
 **Observability**
 * Make `/health/ready` check live Qdrant/LLM connectivity on each poll, rather than only confirming that startup wiring succeeded once.

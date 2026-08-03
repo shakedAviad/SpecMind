@@ -14,6 +14,7 @@ from app.nodes.context_evaluation import ContextEvaluationNode
 from app.nodes.conversation_understanding import ConversationUnderstandingNode
 from app.nodes.generation import GenerationNode
 from app.nodes.memory_retrieval import MemoryRetrievalNode
+from app.nodes.persist_memory import PersistMemoryNode
 from app.nodes.reasoning import ReasoningNode
 from app.nodes.rerank import RerankNode
 from app.nodes.resolve_intent import ResolveIntentNode
@@ -31,8 +32,14 @@ class _FakeConversationUnderstanding:
 
 
 class _FakeMemoryStore:
+    def __init__(self) -> None:
+        self.added_facts: list[tuple[str, list[str]]] = []
+
     async def get_context(self, session_id: str) -> list[str]:
         return []
+
+    async def add_facts(self, session_id: str, facts: list[str]) -> None:
+        self.added_facts.append((session_id, facts))
 
 
 class _FakeIntentResolver:
@@ -121,6 +128,7 @@ def _build_graph_with_fakes(
     _FakeRetrievalQueryRewriter,
     _FakeReasoningService,
     _FakeAnswerGenerator,
+    _FakeMemoryStore,
 ]:
     hybrid_search = _FakeHybridSearch()
     reranker = _FakeLlmReranker()
@@ -128,12 +136,13 @@ def _build_graph_with_fakes(
     query_rewriter = _FakeRetrievalQueryRewriter()
     reasoning_service = _FakeReasoningService()
     answer_generator = _FakeAnswerGenerator()
+    memory_store = _FakeMemoryStore()
 
     graph = build_graph(
         conversation_understanding_node=ConversationUnderstandingNode(
             understanding=_FakeConversationUnderstanding()
         ),
-        memory_retrieval_node=MemoryRetrievalNode(memory_store=_FakeMemoryStore()),
+        memory_retrieval_node=MemoryRetrievalNode(memory_store=memory_store),
         resolve_intent_node=ResolveIntentNode(resolver=_FakeIntentResolver()),
         retrieve_node=RetrieveNode(hybrid_search=hybrid_search),
         rerank_node=RerankNode(reranker=reranker),
@@ -141,6 +150,7 @@ def _build_graph_with_fakes(
         rewrite_retrieval_query_node=RewriteRetrievalQueryNode(query_rewriter=query_rewriter),
         reasoning_node=ReasoningNode(reasoning_service=reasoning_service),
         generation_node=GenerationNode(answer_generator=answer_generator),
+        persist_memory_node=PersistMemoryNode(memory_store=memory_store),
     )
 
     return (
@@ -151,6 +161,7 @@ def _build_graph_with_fakes(
         query_rewriter,
         reasoning_service,
         answer_generator,
+        memory_store,
     )
 
 
@@ -163,6 +174,7 @@ async def test_graph_answers_directly_when_context_is_sufficient_on_the_first_tr
         query_rewriter,
         reasoning_service,
         answer_generator,
+        memory_store,
     ) = _build_graph_with_fakes([ContextEvaluationResult(is_sufficient=True)])
 
     initial_state = create_initial_state(session_id="session-1", question="What is type erasure?")
@@ -176,6 +188,9 @@ async def test_graph_answers_directly_when_context_is_sufficient_on_the_first_tr
     assert query_rewriter.call_count == 0
     assert reasoning_service.call_count == 1
     assert answer_generator.call_count == 1
+    assert memory_store.added_facts == [
+        ("session-1", ["The user asked: What is type erasure? Conclusion: a conclusion"])
+    ]
 
 
 async def test_graph_retries_once_when_context_is_insufficient_then_succeeds() -> None:
@@ -187,6 +202,7 @@ async def test_graph_retries_once_when_context_is_insufficient_then_succeeds() -
         query_rewriter,
         reasoning_service,
         answer_generator,
+        memory_store,
     ) = _build_graph_with_fakes(
         [
             ContextEvaluationResult(is_sufficient=False, missing_information="a gap"),
@@ -206,6 +222,9 @@ async def test_graph_retries_once_when_context_is_insufficient_then_succeeds() -
     assert query_rewriter.call_count == 1
     assert reasoning_service.call_count == 1
     assert answer_generator.call_count == 1
+    assert memory_store.added_facts == [
+        ("session-1", ["The user asked: What about arrays? Conclusion: a conclusion"])
+    ]
 
 
 async def test_graph_does_not_retry_a_second_time_when_still_insufficient() -> None:
@@ -217,6 +236,7 @@ async def test_graph_does_not_retry_a_second_time_when_still_insufficient() -> N
         query_rewriter,
         reasoning_service,
         answer_generator,
+        memory_store,
     ) = _build_graph_with_fakes(
         [ContextEvaluationResult(is_sufficient=False, missing_information="still missing")]
     )
@@ -232,6 +252,9 @@ async def test_graph_does_not_retry_a_second_time_when_still_insufficient() -> N
     assert query_rewriter.call_count == 1
     assert reasoning_service.call_count == 1
     assert answer_generator.call_count == 1
+    assert memory_store.added_facts == [
+        ("session-1", ["The user asked: What about arrays? Conclusion: a conclusion"])
+    ]
 
 
 def test_route_reasons_when_context_is_sufficient() -> None:

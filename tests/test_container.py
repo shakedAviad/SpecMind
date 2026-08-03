@@ -10,6 +10,14 @@ from app.retrieval.hybrid_search import HybridSearch
 _JLS_PDF_PATH = Path(__file__).resolve().parents[1] / "data" / "jls25.pdf"
 
 
+class _FakeEmbeddingClient:
+    def __init__(self, dimensions: int) -> None:
+        self._dimensions = dimensions
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] * self._dimensions for _ in texts]
+
+
 async def test_create_app_container_wires_a_usable_container() -> None:
     settings = Settings(
         openai_api_key="sk-test",
@@ -18,7 +26,11 @@ async def test_create_app_container_wires_a_usable_container() -> None:
     )
     qdrant_client = AsyncQdrantClient(location=":memory:")
 
-    container = await create_app_container(settings, qdrant_client=qdrant_client)
+    container = await create_app_container(
+        settings,
+        qdrant_client=qdrant_client,
+        embedding_client=_FakeEmbeddingClient(settings.openai_embedding_dimensions),
+    )
 
     assert container.graph is not None
     assert isinstance(container.memory_store, MemoryStore)

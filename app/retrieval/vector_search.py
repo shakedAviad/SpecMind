@@ -6,6 +6,8 @@ from app.config.settings import Settings
 from app.llm.embeddings import EmbeddingClient
 from app.models.retrieval import RetrievedChunk
 
+_INGEST_BATCH_SIZE = 100
+
 
 def create_qdrant_client(settings: Settings) -> AsyncQdrantClient:
     return AsyncQdrantClient(url=settings.qdrant_url)
@@ -40,23 +42,25 @@ class VectorSearch:
         if not chunks:
             return
 
-        vectors = await self._embedding_client.embed([chunk.text for chunk in chunks])
+        for start in range(0, len(chunks), _INGEST_BATCH_SIZE):
+            batch = chunks[start : start + _INGEST_BATCH_SIZE]
+            vectors = await self._embedding_client.embed([chunk.text for chunk in batch])
 
-        points = [
-            models.PointStruct(
-                id=_point_id(chunk.chunk_id),
-                vector=vector,
-                payload={
-                    "chunk_id": chunk.chunk_id,
-                    "document": chunk.document,
-                    "chunk_index": chunk.chunk_index,
-                    "text": chunk.text,
-                },
-            )
-            for chunk, vector in zip(chunks, vectors, strict=True)
-        ]
+            points = [
+                models.PointStruct(
+                    id=_point_id(chunk.chunk_id),
+                    vector=vector,
+                    payload={
+                        "chunk_id": chunk.chunk_id,
+                        "document": chunk.document,
+                        "chunk_index": chunk.chunk_index,
+                        "text": chunk.text,
+                    },
+                )
+                for chunk, vector in zip(batch, vectors, strict=True)
+            ]
 
-        await self._client.upsert(collection_name=self._collection_name, points=points)
+            await self._client.upsert(collection_name=self._collection_name, points=points)
 
     async def search(self, query: str, limit: int = 5) -> list[RetrievedChunk]:
         [query_vector] = await self._embedding_client.embed([query])

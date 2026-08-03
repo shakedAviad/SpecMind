@@ -13,12 +13,13 @@ from app.graph.builder import build_graph
 from app.graph.state import GraphState
 from app.intent.resolver import IntentResolver
 from app.llm.client import OpenAiLlmClient, create_chat_model
-from app.llm.embeddings import OpenAiEmbeddingClient, create_embeddings_model
+from app.llm.embeddings import EmbeddingClient, OpenAiEmbeddingClient, create_embeddings_model
 from app.memory.store import MemoryStore
 from app.nodes.context_evaluation import ContextEvaluationNode
 from app.nodes.conversation_understanding import ConversationUnderstandingNode
 from app.nodes.generation import GenerationNode
 from app.nodes.memory_retrieval import MemoryRetrievalNode
+from app.nodes.persist_memory import PersistMemoryNode
 from app.nodes.reasoning import ReasoningNode
 from app.nodes.rerank import RerankNode
 from app.nodes.resolve_intent import ResolveIntentNode
@@ -42,12 +43,14 @@ class AppContainer:
 async def create_app_container(
     settings: Settings,
     qdrant_client: AsyncQdrantClient | None = None,
+    embedding_client: EmbeddingClient | None = None,
 ) -> AppContainer:
     chat_model = create_chat_model(settings)
     llm_client = OpenAiLlmClient(model=chat_model)
 
-    embeddings_model = create_embeddings_model(settings)
-    embedding_client = OpenAiEmbeddingClient(model=embeddings_model)
+    if embedding_client is None:
+        embeddings_model = create_embeddings_model(settings)
+        embedding_client = OpenAiEmbeddingClient(model=embeddings_model)
 
     vector_search = VectorSearch(
         client=qdrant_client or create_qdrant_client(settings),
@@ -61,6 +64,7 @@ async def create_app_container(
     chunks = chunk_pages(pages, document="jls25")
     bm25_search = Bm25Search()
     bm25_search.index(chunks)
+    await vector_search.ingest(chunks)
 
     memory_store = MemoryStore()
     hybrid_search = HybridSearch(vector_search=vector_search, bm25_search=bm25_search)
@@ -83,6 +87,7 @@ async def create_app_container(
         rewrite_retrieval_query_node=RewriteRetrievalQueryNode(query_rewriter=query_rewriter),
         reasoning_node=ReasoningNode(reasoning_service=reasoning_service),
         generation_node=GenerationNode(answer_generator=answer_generator),
+        persist_memory_node=PersistMemoryNode(memory_store=memory_store),
     )
 
     return AppContainer(graph=graph, memory_store=memory_store, hybrid_search=hybrid_search)
